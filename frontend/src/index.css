@@ -1,0 +1,208 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 212, 255, 0.3) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(0, 212, 255, 0.3);
+    border-radius: 2px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 212, 255, 0.6);
+  }
+
+  body {
+    @apply bg-dark-950 text-white font-sans antialiased;
+    background-image: 
+      radial-gradient(ellipse at 20% 50%, rgba(0, 212, 255, 0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(124, 58, 237, 0.04) 0%, transparent 50%);
+  }
+
+  ::selection {
+    background: rgba(0, 212, 255, 0.3);
+    color: white;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-6 py-3 bg-accent-cyan text-dark-950 font-semibold rounded-lg
+    transition-all duration-200 hover:bg-opacity-90 hover:scale-105 active:scale-95
+    focus:outline-none focus:ring-2 focus:ring-accent-cyan focus:ring-offset-2 focus:ring-offset-dark-950;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center gap-2 px-6 py-3 border border-accent-cyan/50 text-accent-cyan font-semibold rounded-lg
+    transition-all duration-200 hover:bg-accent-cyan/10 hover:border-accent-cyan
+    focus:outline-none focus:ring-2 focus:ring-accent-cyan focus:ring-offset-2 focus:ring-offset-dark-950;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-4 py-2 text-gray-400 font-medium rounded-lg
+    transition-all duration-200 hover:bg-dark-700 hover:text-white
+    focus:outline-none focus:ring-2 focus:ring-gray-600;
+  }
+
+  .card {
+    @apply bg-dark-800 border border-dark-600 rounded-xl p-6;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-accent-cyan/30 hover:bg-dark-700 cursor-pointer;
+  }
+
+  .input-field {
+    @apply w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-3 text-white
+    placeholder-gray-500 font-mono text-sm
+    focus:outline-none focus:border-accent-cyan/50 focus:ring-1 focus:ring-accent-cyan/30
+    transition-all duration-200;
+  }
+
+  .label {
+    @apply block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-md text-xs font-mono font-semibold;
+  }
+
+  .badge-cyan {
+    @apply badge bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20;
+  }
+
+  .badge-green {
+    @apply badge bg-accent-green/10 text-accent-green border border-accent-green/20;
+  }
+
+  .badge-red {
+    @apply badge bg-accent-red/10 text-accent-red border border-accent-red/20;
+  }
+
+  .badge-yellow {
+    @apply badge bg-accent-yellow/10 text-accent-yellow border border-accent-yellow/20;
+  }
+
+  .badge-purple {
+    @apply badge bg-accent-purple/10 text-purple-400 border border-accent-purple/20;
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.3), 0 0 30px rgba(0, 212, 255, 0.1);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.3), 0 0 30px rgba(0, 255, 136, 0.1);
+  }
+
+  .glow-red {
+    box-shadow: 0 0 15px rgba(255, 68, 85, 0.3), 0 0 30px rgba(255, 68, 85, 0.1);
+  }
+
+  .text-gradient-cyan {
+    @apply bg-gradient-to-r from-accent-cyan to-blue-400 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-green {
+    @apply bg-gradient-to-r from-accent-green to-teal-400 bg-clip-text text-transparent;
+  }
+
+  .divider {
+    @apply border-t border-dark-600;
+  }
+
+  .grid-bg {
+    background-image: linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px), 
+                      linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+}
+
+/* Typing indicator animation */
+.typing-dot {
+  animation: typingBounce 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
+
+/* Chat message animations */
+.message-enter {
+  animation: messageSlideIn 0.3s ease-out;
+}
+
+@keyframes messageSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scanline effect */
+.scanline::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.08), transparent);
+  animation: scan 8s linear infinite;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+@keyframes scan {
+  0% { top: -5px; }
+  100% { top: 100vh; }
+}
+
+/* Score circle animation */
+@keyframes scoreCircle {
+  from { stroke-dashoffset: 251; }
+  to { stroke-dashoffset: var(--target-offset); }
+}
+
+.score-circle {
+  animation: scoreCircle 1.5s ease-out forwards;
+  stroke-dasharray: 251;
+}
+
+/* Prose overrides for markdown in chat */
+.prose-chat {
+  @apply text-gray-200 text-sm leading-relaxed;
+}
+
+.prose-chat p { @apply mb-3 last:mb-0; }
+.prose-chat ul { @apply list-disc list-inside mb-3 space-y-1; }
+.prose-chat ol { @apply list-decimal list-inside mb-3 space-y-1; }
+.prose-chat li { @apply text-gray-300; }
+.prose-chat strong { @apply text-white font-semibold; }
+.prose-chat em { @apply text-gray-300 italic; }
+.prose-chat h1, .prose-chat h2, .prose-chat h3 { @apply font-bold text-white mb-2 mt-4 first:mt-0; }
+.prose-chat h3 { @apply text-sm; }
+.prose-chat a { @apply text-accent-cyan hover:underline; }
+.prose-chat blockquote { @apply border-l-2 border-accent-cyan/50 pl-3 text-gray-400 italic; }
+.prose-chat hr { @apply border-dark-600 my-4; }
+.prose-chat table { @apply w-full text-sm; }
+.prose-chat th { @apply text-left py-1 pr-4 text-gray-400 font-semibold border-b border-dark-600; }
+.prose-chat td { @apply py-1 pr-4 border-b border-dark-700; }
+.prose-chat code:not(.code-block) { @apply bg-dark-700 text-accent-cyan px-1.5 py-0.5 rounded font-mono text-xs; }
+.prose-chat pre { @apply bg-dark-950 rounded-lg p-4 overflow-x-auto mb-3 border border-dark-600; }
+.prose-chat pre code { @apply bg-transparent text-gray-300 p-0; }
