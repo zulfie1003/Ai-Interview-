@@ -46,6 +46,15 @@ export const AuthProvider = ({ children }) => {
     return data;
   }, []);
 
+  const loginWithGoogle = useCallback(async (credential) => {
+    const { data } = await api.post('/auth/google', { credential });
+    localStorage.setItem('ai_interview_token', data.token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+    setUser(data.user);
+    setToken(data.token);
+    return data;
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('ai_interview_token');
     delete api.defaults.headers.common['Authorization'];
@@ -54,7 +63,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, loginWithGoogle, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

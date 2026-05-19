@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import GoogleSignInButton from '../components/auth/GoogleSignInButton';
 import { Terminal, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 const RegisterPage = () => {
@@ -65,6 +66,14 @@ const RegisterPage = () => {
               {error}
             </div>
           )}
+
+          <GoogleSignInButton label="Sign up directly with Google" />
+
+          <div className="flex items-center gap-3 my-5">
+            <div className="h-px bg-dark-600 flex-1" />
+            <span className="text-xs text-gray-600 font-mono">or create with email</span>
+            <div className="h-px bg-dark-600 flex-1" />
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

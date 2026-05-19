@@ -17,6 +17,7 @@ const CATEGORY_TITLES = {
 };
 
 const VALID_CATEGORIES = Object.keys(CATEGORY_TITLES);
+const MAX_INTERVIEW_MESSAGE_LENGTH = 3000;
 
 // @desc    Start a new interview
 // @route   POST /api/interview/start
@@ -67,8 +68,14 @@ export const sendMessage = async (req, res, next) => {
   try {
     const { interviewId, message, endInterview } = req.body;
 
-    if (!interviewId || !message) {
+    const trimmedMessage = typeof message === 'string' ? message.trim() : '';
+
+    if (!interviewId || !trimmedMessage) {
       return res.status(400).json({ message: 'Interview ID and message are required' });
+    }
+
+    if (trimmedMessage.length > MAX_INTERVIEW_MESSAGE_LENGTH) {
+      return res.status(400).json({ message: `Answer is too long. Keep responses under ${MAX_INTERVIEW_MESSAGE_LENGTH} characters.` });
     }
 
     const interview = await Interview.findOne({
@@ -85,7 +92,7 @@ export const sendMessage = async (req, res, next) => {
     }
 
     // Add user message
-    interview.messages.push({ role: 'user', content: message });
+    interview.messages.push({ role: 'user', content: trimmedMessage });
 
     let aiResponse;
     let evaluation = null;
@@ -121,7 +128,7 @@ export const sendMessage = async (req, res, next) => {
       aiResponse = await continueInterviewSession(
         interview.messages.slice(-10), // Last 10 messages for context
         interview.category,
-        message
+        trimmedMessage
       );
       interview.messages.push({ role: 'assistant', content: aiResponse });
       interview.questionCount = Math.floor(interview.messages.length / 2);

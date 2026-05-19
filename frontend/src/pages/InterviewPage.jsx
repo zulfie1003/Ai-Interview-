@@ -13,6 +13,7 @@ import {
 
 const STAGES = { SELECT: 'select', ACTIVE: 'active', ENDING: 'ending' };
 const MODES = { TEXT: 'text', VOICE: 'voice' };
+const MAX_VOICE_TRANSCRIPT_LENGTH = 1500;
 
 const oopsConcepts = [
   ['Class & Object', 'Blueprint versus real instance created from that blueprint.'],
@@ -49,6 +50,7 @@ const InterviewPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
+  const [micPermission, setMicPermission] = useState('unknown');
   const [availableVoices, setAvailableVoices] = useState([]);
   const [selectedVoice, setSelectedVoice] = useState('');
   const [voiceRate, setVoiceRate] = useState(0.95);
@@ -64,6 +66,7 @@ const InterviewPage = () => {
   const finalSpeechRef = useRef('');
   const recognitionAutoSubmitRef = useRef(false);
   const sendMessageRef = useRef(null);
+  const startListeningRef = useRef(null);
   const timer = useTimer(0, false);
 
   const scrollToBottom = useCallback(() => {
@@ -79,6 +82,22 @@ const InterviewPage = () => {
       recognitionRef.current?.abort();
       window.speechSynthesis?.cancel();
     };
+  }, []);
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const supported = Boolean(SpeechRecognition && navigator.mediaDevices?.getUserMedia);
+    setVoiceSupported(supported);
+
+    if (!supported || !navigator.permissions?.query) return;
+
+    navigator.permissions
+      .query({ name: 'microphone' })
+      .then((permissionStatus) => {
+        setMicPermission(permissionStatus.state);
+        permissionStatus.onchange = () => setMicPermission(permissionStatus.state);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -122,7 +141,7 @@ const InterviewPage = () => {
     utterance.pitch = voicePitch;
     utterance.onend = () => {
       if (options.listenAfter && autoVoiceConversation) {
-        setTimeout(() => startListening(true), 250);
+        setTimeout(() => startListeningRef.current?.(true), 250);
       }
     };
     window.speechSynthesis.speak(utterance);
@@ -132,21 +151,60 @@ const InterviewPage = () => {
     if (cancelAutoSubmit) {
       recognitionAutoSubmitRef.current = false;
     }
-    recognitionRef.current?.stop();
+    try {
+      recognitionRef.current?.stop();
+    } catch {}
     setIsListening(false);
   }, []);
 
-  const startListening = useCallback((autoSubmit = false) => {
+  const requestMicPermission = useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setVoiceSupported(false);
+      setMicPermission('denied');
+      setError('Microphone access is not available in this browser. Use Chrome on HTTPS or localhost.');
+      return false;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+      setMicPermission('granted');
+      setError('');
+      return true;
+    } catch {
+      setMicPermission('denied');
+      setError('Microphone permission was denied. Allow microphone access to use voice interviews.');
+      return false;
+    }
+  }, []);
+
+  const cleanVoiceTranscript = (text) =>
+    text
+      .replace(/[\u0000-\u001F\u007F]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_VOICE_TRANSCRIPT_LENGTH);
+
+  const startListening = useCallback(async (autoSubmit = false) => {
+    if (isListening || isTyping || stage === STAGES.ENDING) return;
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
+    if (!SpeechRecognition || !navigator.mediaDevices?.getUserMedia) {
       setVoiceSupported(false);
       setError('Voice mode is not supported in this browser. Use Chrome or switch to text mode.');
       return;
     }
 
+    if (micPermission !== 'granted') {
+      const allowed = await requestMicPermission();
+      if (!allowed) return;
+    }
+
     window.speechSynthesis?.cancel();
-    recognitionRef.current?.abort();
+    try {
+      recognitionRef.current?.abort();
+    } catch {}
     finalSpeechRef.current = '';
     recognitionAutoSubmitRef.current = autoSubmit;
 
@@ -161,22 +219,32 @@ const InterviewPage = () => {
       for (let i = 0; i < event.results.length; i += 1) {
         transcript += event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalSpeechRef.current += `${event.results[i][0].transcript} `;
+          finalSpeechRef.current = cleanVoiceTranscript(`${finalSpeechRef.current} ${event.results[i][0].transcript}`);
         }
       }
 
-      transcript = transcript.trim();
+      transcript = cleanVoiceTranscript(transcript);
       setInput(transcript);
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
       setIsListening(false);
+      recognitionAutoSubmitRef.current = false;
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setMicPermission('denied');
+        setError('Microphone permission is blocked. Enable it in browser settings and try again.');
+        return;
+      }
+      if (event.error === 'no-speech') {
+        setError('No speech detected. Try recording again.');
+        return;
+      }
       setError('Voice capture stopped. Check microphone permission and try again.');
     };
 
     recognition.onend = () => {
       setIsListening(false);
-      const finalTranscript = finalSpeechRef.current.trim();
+      const finalTranscript = cleanVoiceTranscript(finalSpeechRef.current || input);
 
       if (recognitionAutoSubmitRef.current && finalTranscript) {
         recognitionAutoSubmitRef.current = false;
@@ -186,14 +254,45 @@ const InterviewPage = () => {
 
     recognitionRef.current = recognition;
     setError('');
-    setIsListening(true);
-    recognition.start();
-  }, []);
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch {
+      recognitionAutoSubmitRef.current = false;
+      setIsListening(false);
+      setError('Could not start voice capture. Stop any active recording and try again.');
+    }
+  }, [input, isListening, isTyping, micPermission, requestMicPermission, stage]);
+
+  startListeningRef.current = startListening;
+
+  const applyIndianDeepVoice = () => {
+    const voice =
+      availableVoices.find((item) => item.lang === 'en-IN' && item.name.toLowerCase().includes('male')) ||
+      availableVoices.find((item) => item.lang === 'hi-IN' && item.name.toLowerCase().includes('male')) ||
+      availableVoices.find((item) => item.lang === 'en-IN') ||
+      availableVoices.find((item) => item.lang === 'hi-IN') ||
+      availableVoices.find((item) => ['rishi', 'ravi', 'hemant'].some((name) => item.name.toLowerCase().includes(name))) ||
+      availableVoices.find((item) => item.lang?.startsWith('en') && item.name.toLowerCase().includes('male')) ||
+      availableVoices.find((item) => item.lang?.startsWith('en'));
+
+    if (voice) {
+      setSelectedVoice(voice.voiceURI);
+    }
+
+    setVoiceRate(0.85);
+    setVoicePitch(0.65);
+  };
 
   const startInterview = async () => {
     setIsLoading(true);
     setError('');
     try {
+      if (interviewMode === MODES.VOICE) {
+        const allowed = await requestMicPermission();
+        if (!allowed) return;
+      }
+
       const { data } = await interviewService.start(category);
       setInterviewId(data.interview._id);
       setMessages(data.interview.messages);
@@ -367,6 +466,32 @@ const InterviewPage = () => {
             </div>
 
             <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-dark-700/70 border border-dark-600">
+                <span>
+                  <span className="block text-xs font-semibold text-white">Microphone permission</span>
+                  <span className={`block text-xs font-mono ${
+                    micPermission === 'granted'
+                      ? 'text-accent-green'
+                      : micPermission === 'denied'
+                        ? 'text-accent-red'
+                        : 'text-gray-500'
+                  }`}>
+                    {voiceSupported
+                      ? `Status: ${micPermission}`
+                      : 'Voice capture is not supported in this browser'}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={requestMicPermission}
+                  disabled={!voiceSupported || micPermission === 'granted'}
+                  className="btn-ghost text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Mic className="w-3.5 h-3.5" />
+                  {micPermission === 'granted' ? 'Allowed' : 'Allow mic'}
+                </button>
+              </div>
+
               <div>
                 <label className="label" htmlFor="voice-select">Alex voice</label>
                 <select
@@ -415,14 +540,37 @@ const InterviewPage = () => {
                 </label>
               </div>
 
-              <button
-                type="button"
-                onClick={() => speak('This is Alex. I will conduct your interview in this voice.')}
-                className="btn-ghost text-xs"
-              >
-                <Volume2 className="w-3.5 h-3.5" />
-                Test voice
-              </button>
+              <label className="flex items-center justify-between gap-3 p-3 rounded-lg bg-dark-700/70 border border-dark-600">
+                <span>
+                  <span className="block text-xs font-semibold text-white">Auto conversation</span>
+                  <span className="block text-xs text-gray-500 font-mono">Alex speaks, then mic opens for your answer.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={autoVoiceConversation}
+                  onChange={(event) => setAutoVoiceConversation(event.target.checked)}
+                  className="w-4 h-4 accent-cyan-400"
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={applyIndianDeepVoice}
+                  className="btn-ghost text-xs"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  Indian deep male preset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => speak('This is Alex. I will conduct your interview in this voice.')}
+                  className="btn-ghost text-xs"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  Test voice
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -437,7 +585,7 @@ const InterviewPage = () => {
               <p className="text-sm text-gray-300">
                 Ready when you are. I'll start with an introduction then dive straight into the interview.
                 {interviewMode === MODES.VOICE
-                  ? ' Use the mic button to record each answer.'
+                  ? ' In auto mode, I will speak first and then listen for your answer.'
                   : ' Answer clearly. I\'ll challenge anything vague.'}
               </p>
             </div>
@@ -571,7 +719,9 @@ const InterviewPage = () => {
               <div className="flex items-center gap-2 min-w-0">
                 <Volume2 className="w-4 h-4 text-accent-green shrink-0" />
                 <p className="text-xs text-gray-400 font-mono truncate">
-                  {voiceSupported ? (isListening ? 'Listening...' : 'Voice mode ready') : 'Voice mode unavailable'}
+                  {voiceSupported
+                    ? (isListening ? 'Listening...' : `Voice mode ready · mic ${micPermission}`)
+                    : 'Voice mode unavailable'}
                 </p>
               </div>
               <button
