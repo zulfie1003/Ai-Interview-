@@ -15,15 +15,25 @@ const buildUserResponse = (user) => ({
 // @access  Public
 export const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const name = req.body.name?.trim();
+    const email = req.body.email?.trim().toLowerCase();
+    const password = req.body.password;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
 
+    if (name.length < 2) {
+      return res.status(400).json({ message: 'Name must be at least 2 characters' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ message: 'Email already registered' });
+      return res.status(400).json({ message: 'Email already registered. Please sign in instead.' });
     }
 
     const user = await User.create({ name, email, password });
