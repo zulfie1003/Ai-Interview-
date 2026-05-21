@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import { generateToken } from '../utils/generateToken.js';
 
+// Keeps auth API responses consistent and avoids sending password fields to the frontend.
 const buildUserResponse = (user) => ({
   _id: user._id,
   name: user.name,
@@ -15,6 +16,7 @@ const buildUserResponse = (user) => ({
 // @access  Public
 export const register = async (req, res, next) => {
   try {
+    // Normalize user input before validation and storage.
     const name = req.body.name?.trim();
     const email = req.body.email?.trim().toLowerCase();
     const password = req.body.password;
@@ -31,6 +33,7 @@ export const register = async (req, res, next) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
+    // Email must be unique across normal password and Google accounts.
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: 'Email already registered. Please sign in instead.' });
@@ -65,6 +68,7 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    // Password comparison is handled by the User model so hashes never leave the model layer.
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password' });
@@ -98,6 +102,7 @@ export const googleLogin = async (req, res, next) => {
       return res.status(400).json({ message: 'Google credential is required' });
     }
 
+    // Verify the Google ID token server-side before trusting the profile data.
     const verifyUrl = new URL('https://oauth2.googleapis.com/tokeninfo');
     verifyUrl.searchParams.set('id_token', credential);
 
@@ -108,6 +113,7 @@ export const googleLogin = async (req, res, next) => {
       return res.status(401).json({ message: 'Google authentication failed' });
     }
 
+    // Existing email accounts are linked to Google; new Google users are created automatically.
     let user = await User.findOne({ email: profile.email.toLowerCase() });
 
     if (user) {
@@ -141,6 +147,7 @@ export const googleLogin = async (req, res, next) => {
 // @route   GET /api/auth/me
 // @access  Private
 export const getMe = async (req, res) => {
+  // authMiddleware already loaded req.user, so this simply returns the current profile.
   res.json({
     user: buildUserResponse(req.user),
   });

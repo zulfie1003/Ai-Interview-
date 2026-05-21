@@ -19,6 +19,7 @@ const CATEGORY_TITLES = {
 const VALID_CATEGORIES = Object.keys(CATEGORY_TITLES);
 const MAX_INTERVIEW_MESSAGE_LENGTH = 3000;
 
+// Starts a fresh interview document after Alex generates the first question.
 // @desc    Start a new interview
 // @route   POST /api/interview/start
 // @access  Private
@@ -30,7 +31,7 @@ export const startInterview = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid interview category' });
     }
 
-    // Get AI opening message
+    // Ask Groq for the opening message based on the selected category.
     const aiMessage = await startInterviewSession(category, req.user.name);
 
     const interview = await Interview.create({
@@ -61,6 +62,7 @@ export const startInterview = async (req, res, next) => {
   }
 };
 
+// Handles each student answer, stores it, and either continues or completes the interview.
 // @desc    Send a message in an interview
 // @route   POST /api/interview/message
 // @access  Private
@@ -91,21 +93,21 @@ export const sendMessage = async (req, res, next) => {
       return res.status(400).json({ message: 'This interview has already ended' });
     }
 
-    // Add user message
+    // Store the student's answer before generating Alex's next response.
     interview.messages.push({ role: 'user', content: trimmedMessage });
 
     let aiResponse;
     let evaluation = null;
 
-    // Check if we should end the interview (after enough exchanges or user requested)
+    // End automatically after enough answers, or immediately if the user requests it.
     const userMessageCount = interview.messages.filter((m) => m.role === 'user').length;
     const shouldEnd = endInterview || userMessageCount >= 7;
 
     if (shouldEnd) {
-      // Generate final evaluation
+      // Ask the AI for structured scores, feedback, strengths, and improvements.
       evaluation = await generateFinalEvaluation(interview.messages, interview.category);
 
-      // Create wrap-up message
+      // Convert the final verdict into a closing message shown in chat.
       const verdictMessages = {
         hire: "That concludes our interview. I have all the information I need. You've demonstrated strong technical abilities and communication. I'll be recommending you move forward.",
         'weak-hire': "That concludes our interview. You showed some solid fundamentals but there were gaps in depth on a few areas. I'll submit a weak hire recommendation — worth investing in.",
@@ -115,7 +117,7 @@ export const sendMessage = async (req, res, next) => {
       aiResponse = verdictMessages[evaluation.finalVerdict] ||
         "That concludes our interview. I have enough information to make my assessment. Thank you for your time.";
 
-      // Update interview with final data
+      // Save final evaluation data directly on the interview document.
       interview.messages.push({ role: 'assistant', content: aiResponse });
       interview.scores = evaluation.scores;
       interview.finalVerdict = evaluation.finalVerdict;
@@ -124,7 +126,7 @@ export const sendMessage = async (req, res, next) => {
       interview.improvements = evaluation.improvements;
       interview.status = 'completed';
     } else {
-      // Continue interview
+      // Continue the interview using only the recent messages to keep the prompt small.
       aiResponse = await continueInterviewSession(
         interview.messages.slice(-10), // Last 10 messages for context
         interview.category,
@@ -147,6 +149,7 @@ export const sendMessage = async (req, res, next) => {
   }
 };
 
+// Returns paginated interview history plus dashboard statistics for the logged-in user.
 // @desc    Get interview history for user
 // @route   GET /api/interview/history
 // @access  Private
@@ -165,7 +168,7 @@ export const getHistory = async (req, res, next) => {
 
     const total = await Interview.countDocuments({ userId: req.user._id });
 
-    // Stats
+    // Build lightweight dashboard stats from the current page of interviews.
     const completed = interviews.filter((i) => i.status === 'completed');
     const avgScore =
       completed.length > 0
@@ -197,6 +200,7 @@ export const getHistory = async (req, res, next) => {
   }
 };
 
+// Returns one complete interview transcript and result for the owner.
 // @desc    Get single interview by ID
 // @route   GET /api/interview/:id
 // @access  Private
@@ -217,6 +221,7 @@ export const getInterview = async (req, res, next) => {
   }
 };
 
+// Lets a user leave an active interview without generating final scores.
 // @desc    Abandon an interview
 // @route   PUT /api/interview/:id/abandon
 // @access  Private

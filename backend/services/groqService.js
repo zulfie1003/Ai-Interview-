@@ -12,18 +12,21 @@ const GROQ_CHAT_COMPLETIONS_URL = 'https://api.groq.com/openai/v1/chat/completio
 const getApiKey = () => (process.env.GROQ_API_KEY || '').trim();
 const getModelName = () => (process.env.GROQ_MODEL || 'llama-3.1-8b-instant').trim();
 
+// Protects the app from calling Groq with an empty or example API key.
 const isPlaceholderKey = (apiKey) =>
   !apiKey ||
   apiKey === 'your_groq_api_key_here' ||
   apiKey === 'your_real_groq_api_key' ||
   apiKey.includes('your_');
 
+// Creates errors with HTTP status codes so the global error handler can respond correctly.
 const createProviderError = (message, statusCode = 503) => {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
 };
 
+// Shared Groq chat-completions helper used by all interview AI features.
 const generateText = async (messages, options = {}) => {
   const apiKey = getApiKey();
 
@@ -106,6 +109,7 @@ const CATEGORY_PROMPTS = {
   mixed: `Mix of DSA, System Design, OOP, Computer Networks, DBMS, Operating Systems, and Behavioral questions. Start with a warm-up behavioral question, then move to technical and core CS topics.`,
 };
 
+// Generates Alex's introduction and first question for a selected interview category.
 export const startInterviewSession = async (category, userName) => {
   const categoryContext = CATEGORY_PROMPTS[category] || CATEGORY_PROMPTS.mixed;
 
@@ -120,6 +124,7 @@ The candidate's name is ${userName}. Begin the interview now. Introduce yourself
   ]);
 };
 
+// Generates Alex's feedback and next question from recent conversation context.
 export const continueInterviewSession = async (messages, category, userMessage) => {
   const categoryContext = CATEGORY_PROMPTS[category] || CATEGORY_PROMPTS.mixed;
 
@@ -143,6 +148,7 @@ Respond as Alex. Give brief feedback on their answer, then continue the intervie
   ]);
 };
 
+// Produces the final structured JSON evaluation after the interview ends.
 export const generateFinalEvaluation = async (messages, category) => {
   const conversationHistory = messages
     .map((m) => `${m.role === 'user' ? 'CANDIDATE' : 'ALEX'}: ${m.content}`)
@@ -189,6 +195,7 @@ Base the verdict on: hire (8+/10 overall), weak-hire (6-7.9), no-hire (<6).`,
   try {
     return JSON.parse(cleaned);
   } catch {
+    // If the AI returns invalid JSON, keep the app usable with a safe fallback result.
     return {
       scores: {
         communication: 5,

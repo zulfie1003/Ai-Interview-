@@ -1,12 +1,13 @@
 import axios from 'axios';
 
+// Central Axios client. In production VITE_API_URL points to Render; locally Vite proxies /api.
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 });
 
-// Response interceptor for global error handling
+// Global auth error handling: expired/invalid tokens send the user back to login.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -21,7 +22,7 @@ api.interceptors.response.use(
   }
 );
 
-// Init token if available
+// Attach the saved token when the app first loads.
 const token = localStorage.getItem('ai_interview_token');
 if (token) {
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;

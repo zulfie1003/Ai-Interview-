@@ -6,12 +6,14 @@ import interviewRoutes from './routes/interviewRoutes.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 
 const app = express();
+
+// Allow local development, the configured production frontend, and all Vercel preview URLs.
 const allowedOrigins = [
   'http://localhost:5173',
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
-// Middleware
+// CORS must return the exact requesting origin when credentials are enabled.
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -31,20 +33,21 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Log requests in development so API failures are easier to debug locally.
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
 }
 
-// Health check
+// Simple Render/local health check endpoint.
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'AI-Interview API is running', timestamp: new Date().toISOString() });
 });
 
-// Routes
+// Feature routes.
 app.use('/api/auth', authRoutes);
 app.use('/api/interview', interviewRoutes);
 
-// Error handling
+// 404 and centralized error handling stay last.
 app.use(notFound);
 app.use(errorHandler);
 

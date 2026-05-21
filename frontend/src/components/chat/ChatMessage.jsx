@@ -84,8 +84,9 @@ const ChatMessage = ({ message }) => {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                code({ node, inline, className, children, ...props }) {
-                  if (!inline) {
+                code({ node, className, children, ...props }) {
+                  // Fenced markdown code blocks receive a language-* class; inline code does not.
+                  if (/language-(\w+)/.test(className || '')) {
                     return <CodeBlock className={className}>{children}</CodeBlock>;
                   }
                   return (

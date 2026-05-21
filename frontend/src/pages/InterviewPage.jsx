@@ -17,6 +17,7 @@ const MAX_VOICE_TRANSCRIPT_LENGTH = 1500;
 const getVoiceId = (voice, index) =>
   `${voice.voiceURI || voice.name || 'voice'}-${voice.lang || 'unknown'}-${index}`;
 
+// Quick learning cards shown when the student chooses the OOP interview category.
 const oopsConcepts = [
   ['Class & Object', 'Blueprint versus real instance created from that blueprint.'],
   ['Encapsulation', 'Keep data and behavior together, expose controlled access.'],
@@ -73,6 +74,7 @@ const InterviewPage = () => {
   const startListeningRef = useRef(null);
   const timer = useTimer(0, false);
 
+  // Keeps the latest chat message visible whenever Alex or the student sends a message.
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
@@ -83,6 +85,7 @@ const InterviewPage = () => {
 
   useEffect(() => {
     return () => {
+      // Stop browser voice APIs when the user leaves the page to avoid stale callbacks.
       ignoreRecognitionErrorRef.current = true;
       try {
         recognitionRef.current?.abort();
@@ -92,6 +95,7 @@ const InterviewPage = () => {
   }, []);
 
   useEffect(() => {
+    // Detect whether this browser supports speech recognition and track mic permission changes.
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const supported = Boolean(SpeechRecognition && navigator.mediaDevices?.getUserMedia);
     setVoiceSupported(supported);
@@ -110,6 +114,7 @@ const InterviewPage = () => {
   useEffect(() => {
     if (!('speechSynthesis' in window)) return;
 
+    // Load text-to-speech voices and choose a sensible English default.
     const loadVoices = () => {
       const voices = window.speechSynthesis.getVoices();
       setAvailableVoices(voices);
@@ -136,6 +141,7 @@ const InterviewPage = () => {
   const speak = useCallback((text, options = {}) => {
     if (interviewMode !== MODES.VOICE || !('speechSynthesis' in window)) return;
 
+    // Speak Alex's reply aloud, removing code blocks because speech engines read them poorly.
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, 'code block omitted'));
     const voice = availableVoices.find((item, index) => getVoiceId(item, index) === selectedVoice);
@@ -148,6 +154,7 @@ const InterviewPage = () => {
     utterance.rate = voiceRate;
     utterance.pitch = voicePitch;
     utterance.onend = () => {
+      // In auto mode, start listening only after Alex has finished speaking.
       if (options.listenAfter && autoVoiceConversation) {
         setTimeout(() => startListeningRef.current?.(true), 250);
       }
@@ -156,6 +163,7 @@ const InterviewPage = () => {
   }, [autoVoiceConversation, availableVoices, interviewMode, selectedVoice, voicePitch, voiceRate]);
 
   const stopListening = useCallback((cancelAutoSubmit = true) => {
+    // Mark this as an intentional stop so Chrome's aborted event is ignored.
     if (cancelAutoSubmit) {
       recognitionAutoSubmitRef.current = false;
     }
@@ -167,6 +175,7 @@ const InterviewPage = () => {
   }, []);
 
   const requestMicPermission = useCallback(async () => {
+    // Ask the browser for microphone permission before voice interview starts.
     if (!navigator.mediaDevices?.getUserMedia) {
       setVoiceSupported(false);
       setMicPermission('denied');
@@ -188,6 +197,7 @@ const InterviewPage = () => {
   }, []);
 
   const cleanVoiceTranscript = (text) =>
+    // Normalize speech text and cap the size before sending it to the backend.
     text
       .replace(/[\u0000-\u001F\u007F]/g, ' ')
       .replace(/\s+/g, ' ')
@@ -212,6 +222,7 @@ const InterviewPage = () => {
 
     window.speechSynthesis?.cancel();
     try {
+      // Abort any previous recognition instance before starting a fresh session.
       ignoreRecognitionErrorRef.current = true;
       recognitionRef.current?.abort();
     } catch {}
@@ -220,12 +231,14 @@ const InterviewPage = () => {
     recognitionSessionRef.current += 1;
     const sessionId = recognitionSessionRef.current;
 
+    // Configure browser speech recognition for one answer at a time.
     const recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
     recognition.interimResults = true;
     recognition.continuous = false;
 
     recognition.onresult = (event) => {
+      // Show interim speech immediately and store the final transcript separately.
       let transcript = '';
 
       for (let i = 0; i < event.results.length; i += 1) {
@@ -240,6 +253,7 @@ const InterviewPage = () => {
     };
 
     recognition.onerror = (event) => {
+      // Ignore delayed callbacks from old recognition sessions.
       if (sessionId !== recognitionSessionRef.current) {
         return;
       }
@@ -247,6 +261,7 @@ const InterviewPage = () => {
         return;
       }
 
+      // Convert browser speech errors into helpful messages for the student.
       setIsListening(false);
       recognitionAutoSubmitRef.current = false;
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
@@ -270,6 +285,7 @@ const InterviewPage = () => {
     };
 
     recognition.onend = () => {
+      // Only the latest recognition session is allowed to update the UI.
       if (sessionId !== recognitionSessionRef.current) {
         return;
       }
@@ -281,6 +297,7 @@ const InterviewPage = () => {
 
       const finalTranscript = cleanVoiceTranscript(finalSpeechRef.current || input);
 
+      // Auto-submit is used for hands-free voice interview mode after Alex asks a question.
       if (recognitionAutoSubmitRef.current && finalTranscript) {
         recognitionAutoSubmitRef.current = false;
         sendMessageRef.current?.(false, finalTranscript);
@@ -304,6 +321,7 @@ const InterviewPage = () => {
   startListeningRef.current = startListening;
 
   const applyIndianDeepVoice = () => {
+    // Prefer Indian English/Hindi voices when available, then lower pitch/rate for a deeper tone.
     const voice =
       availableVoices.find((item) => item.lang === 'en-IN' && item.name.toLowerCase().includes('male')) ||
       availableVoices.find((item) => item.lang === 'hi-IN' && item.name.toLowerCase().includes('male')) ||
@@ -322,6 +340,7 @@ const InterviewPage = () => {
   };
 
   const startInterview = async () => {
+    // Creates a new backend interview session and receives Alex's opening question.
     setIsLoading(true);
     setError('');
     try {
@@ -345,6 +364,7 @@ const InterviewPage = () => {
   };
 
   const sendMessage = async (endInterview = false, overrideMessage = '') => {
+    // Sends the student's answer, updates the chat optimistically, then asks Alex for the next reply.
     const userMessage = (overrideMessage || input).trim();
     if (!userMessage || isTyping) return;
 
@@ -389,6 +409,7 @@ const InterviewPage = () => {
   sendMessageRef.current = sendMessage;
 
   const handleKeyDown = (e) => {
+    // Enter sends the answer, while Shift+Enter keeps normal multiline typing.
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -396,6 +417,7 @@ const InterviewPage = () => {
   };
 
   const handleEndInterview = async () => {
+    // If there is no typed answer, send a short wrap-up message before final evaluation.
     if (!input.trim()) {
       setShowEndConfirm(false);
       sendMessage(true, "I think I've covered the main points. Can we wrap up?");
@@ -406,6 +428,7 @@ const InterviewPage = () => {
   };
 
   const abandonInterview = async () => {
+    // Marks the active interview as abandoned, then returns to the dashboard.
     try {
       await interviewService.abandon(interviewId);
     } catch {}

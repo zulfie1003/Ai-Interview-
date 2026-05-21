@@ -10,6 +10,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
+      // Restore the saved JWT on page refresh and validate it with the backend.
       const storedToken = localStorage.getItem('ai_interview_token');
       if (storedToken) {
         try {
@@ -29,6 +30,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = useCallback(async (email, password) => {
+    // Password login stores the JWT and attaches it to all future API requests.
     const { data } = await api.post('/auth/login', { email, password });
     localStorage.setItem('ai_interview_token', data.token);
     api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
@@ -38,6 +40,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const register = useCallback(async (name, email, password) => {
+    // Registration immediately signs the user in after account creation.
     const { data } = await api.post('/auth/register', { name, email, password });
     localStorage.setItem('ai_interview_token', data.token);
     api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
@@ -47,6 +50,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const loginWithGoogle = useCallback(async (credential) => {
+    // Google login sends the browser credential to the backend for server-side verification.
     const { data } = await api.post('/auth/google', { credential });
     localStorage.setItem('ai_interview_token', data.token);
     api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
@@ -56,6 +60,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
+    // Clear local auth state and remove the default Authorization header.
     localStorage.removeItem('ai_interview_token');
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
