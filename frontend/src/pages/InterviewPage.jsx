@@ -14,6 +14,8 @@ import {
 const STAGES = { SELECT: 'select', ACTIVE: 'active', ENDING: 'ending' };
 const MODES = { TEXT: 'text', VOICE: 'voice' };
 const MAX_VOICE_TRANSCRIPT_LENGTH = 1500;
+const getVoiceId = (voice, index) =>
+  `${voice.voiceURI || voice.name || 'voice'}-${voice.lang || 'unknown'}-${index}`;
 
 const oopsConcepts = [
   ['Class & Object', 'Blueprint versus real instance created from that blueprint.'],
@@ -65,6 +67,8 @@ const InterviewPage = () => {
   const recognitionRef = useRef(null);
   const finalSpeechRef = useRef('');
   const recognitionAutoSubmitRef = useRef(false);
+  const ignoreRecognitionErrorRef = useRef(false);
+  const recognitionSessionRef = useRef(0);
   const sendMessageRef = useRef(null);
   const startListeningRef = useRef(null);
   const timer = useTimer(0, false);
@@ -79,7 +83,10 @@ const InterviewPage = () => {
 
   useEffect(() => {
     return () => {
-      recognitionRef.current?.abort();
+      ignoreRecognitionErrorRef.current = true;
+      try {
+        recognitionRef.current?.abort();
+      } catch {}
       window.speechSynthesis?.cancel();
     };
   }, []);
@@ -112,8 +119,9 @@ const InterviewPage = () => {
           voices.find((voice) => voice.lang?.startsWith('en') && voice.name.toLowerCase().includes('male')) ||
           voices.find((voice) => voice.lang?.startsWith('en')) ||
           voices[0];
+        const preferredVoiceIndex = voices.indexOf(preferredVoice);
 
-        setSelectedVoice(preferredVoice.voiceURI);
+        setSelectedVoice(getVoiceId(preferredVoice, preferredVoiceIndex));
       }
     };
 
@@ -130,7 +138,7 @@ const InterviewPage = () => {
 
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, 'code block omitted'));
-    const voice = availableVoices.find((item) => item.voiceURI === selectedVoice);
+    const voice = availableVoices.find((item, index) => getVoiceId(item, index) === selectedVoice);
 
     if (voice) {
       utterance.voice = voice;
@@ -151,6 +159,7 @@ const InterviewPage = () => {
     if (cancelAutoSubmit) {
       recognitionAutoSubmitRef.current = false;
     }
+    ignoreRecognitionErrorRef.current = true;
     try {
       recognitionRef.current?.stop();
     } catch {}
@@ -203,10 +212,13 @@ const InterviewPage = () => {
 
     window.speechSynthesis?.cancel();
     try {
+      ignoreRecognitionErrorRef.current = true;
       recognitionRef.current?.abort();
     } catch {}
     finalSpeechRef.current = '';
-    recognitionAutoSubmitRef.current = autoSubmit;
+    recognitionAutoSubmitRef.current = Boolean(autoSubmit);
+    recognitionSessionRef.current += 1;
+    const sessionId = recognitionSessionRef.current;
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
@@ -228,6 +240,13 @@ const InterviewPage = () => {
     };
 
     recognition.onerror = (event) => {
+      if (sessionId !== recognitionSessionRef.current) {
+        return;
+      }
+      if (ignoreRecognitionErrorRef.current || event.error === 'aborted') {
+        return;
+      }
+
       setIsListening(false);
       recognitionAutoSubmitRef.current = false;
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
@@ -239,11 +258,27 @@ const InterviewPage = () => {
         setError('No speech detected. Try recording again.');
         return;
       }
-      setError('Voice capture stopped. Check microphone permission and try again.');
+      if (event.error === 'audio-capture') {
+        setError('No microphone was found or another app is using it. Close other recording apps and try again.');
+        return;
+      }
+      if (event.error === 'network') {
+        setError('Speech recognition network error. Try again or switch to text mode.');
+        return;
+      }
+      setError(`Voice capture stopped (${event.error || 'unknown'}). Try recording again.`);
     };
 
     recognition.onend = () => {
+      if (sessionId !== recognitionSessionRef.current) {
+        return;
+      }
       setIsListening(false);
+      if (ignoreRecognitionErrorRef.current) {
+        ignoreRecognitionErrorRef.current = false;
+        return;
+      }
+
       const finalTranscript = cleanVoiceTranscript(finalSpeechRef.current || input);
 
       if (recognitionAutoSubmitRef.current && finalTranscript) {
@@ -255,9 +290,11 @@ const InterviewPage = () => {
     recognitionRef.current = recognition;
     setError('');
     try {
+      ignoreRecognitionErrorRef.current = false;
       recognition.start();
       setIsListening(true);
     } catch {
+      ignoreRecognitionErrorRef.current = false;
       recognitionAutoSubmitRef.current = false;
       setIsListening(false);
       setError('Could not start voice capture. Stop any active recording and try again.');
@@ -277,7 +314,7 @@ const InterviewPage = () => {
       availableVoices.find((item) => item.lang?.startsWith('en'));
 
     if (voice) {
-      setSelectedVoice(voice.voiceURI);
+      setSelectedVoice(getVoiceId(voice, availableVoices.indexOf(voice)));
     }
 
     setVoiceRate(0.85);
@@ -504,11 +541,15 @@ const InterviewPage = () => {
                   {availableVoices.length === 0 ? (
                     <option value="">Browser voices loading...</option>
                   ) : (
-                    availableVoices.map((voice) => (
-                      <option key={voice.voiceURI} value={voice.voiceURI}>
+                    availableVoices.map((voice, index) => {
+                      const voiceId = getVoiceId(voice, index);
+
+                      return (
+                      <option key={voiceId} value={voiceId}>
                         {voice.name} ({voice.lang})
                       </option>
-                    ))
+                      );
+                    })
                   )}
                 </select>
               </div>
@@ -726,7 +767,7 @@ const InterviewPage = () => {
               </div>
               <button
                 type="button"
-                onClick={isListening ? stopListening : startListening}
+                onClick={isListening ? () => stopListening() : () => startListening(false)}
                 disabled={isTyping || stage === STAGES.ENDING}
                 className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-mono transition-all ${
                   isListening
